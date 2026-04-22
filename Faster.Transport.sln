@@ -31,6 +31,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Faster.Transport.Ipc.Sample
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Faster.Transport.Ipc.Sample.Net8.Single", "samples\Faster.Transport.Ipc.Sample.Net8.Single\Faster.Transport.Ipc.Sample.Net8.Single.csproj", "{98C2AC14-E24C-FDBE-3766-6874372D99BC}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Faster.Transport.Ipc.Sample.Net9.Server01Perf", "samples\Faster.Transport.Ipc.Sample.Net9.Server01Perf\Faster.Transport.Ipc.Sample.Net9.Server01Perf.csproj", "{FF554EE2-190F-47B3-B1FE-A7AFCB45B9AA}"
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
