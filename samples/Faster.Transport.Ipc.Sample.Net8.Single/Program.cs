@@ -1,7 +1,13 @@
-using Faster.Transport.Ipc;
 using System;
 using System.Text;
 using System.Threading;
+
+using Faster.Transport.Ipc;
+using Faster.Transport.Contracts;
+
+
+
+namespace Faster.Transport.Ipc.Sample.Single;
 
 class Program
 {
@@ -9,37 +15,104 @@ class Program
     {
         const string Base = "FasterIpcDemo";
         var server = new MappedReactor(Base);
-        server.OnConnected += id => Console.WriteLine($"[SERVER] Client {id:X16} connected");
-        server.OnReceived += (particle, mem) =>
-        {
-            var msg = Encoding.UTF8.GetString(mem.Span);
-            // Console.WriteLine($"[SERVER] <- {id:X16}: {msg}");
-            particle.Send(Encoding.UTF8.GetBytes("echo:" + msg));
-        };
+        server.OnConnected += SeverOnConnected;
+        server.OnReceived += ServerOnReceived;
         server.Start();
 
         var c1 = new MappedParticle(Base, 0xA1UL);
         var c2 = new MappedParticle(Base, 0xB2UL);
 
         c1.OnReceived += (particale, mem) => Console.WriteLine($"[C1] <- {Encoding.UTF8.GetString(mem.Span)}");
+        c2.OnReceived += (particale, mem) => Console.WriteLine($"[C2] <- {Encoding.UTF8.GetString(mem.Span)}");
 
         c1.Start();
         c2.Start();
 
-        Console.WriteLine("Type '1 hi' or '2 hi' to send from client1/client2. Empty to quit.");
+        Console.WriteLine("Type '1 hi' or '2 hi' to send FROM client1/client2. Type /exit to quit.");
         while (true)
         {
-            var line = Console.ReadLine();
-            if (string.IsNullOrWhiteSpace(line)) break;
-            if (line.Length > 2 && (line[0] == '1' || line[0] == '2') && line[1] == ' ')
+            string line = Console.ReadLine() ?? "";
+
+            if ("" == line)
+                continue;
+
+            if ("/exit" == line)
+                break;
+
+            if ((line.Length > 2) &&
+                (line[0] == '1' || line[0] == '2') && (line[1] == ' '))
             {
-                var text = line[2..];
-                var bytes = Encoding.UTF8.GetBytes(text);
-                if (line[0] == '1') c1.Send(bytes);
-                else c2.Send(bytes);
+                string text = line[2..];
+                byte[] bytes = Encoding.UTF8.GetBytes(text);
+
+                if (line[0] == '1')
+                    c1.Send(bytes);
+                else
+                    c2.Send(bytes);
+            }
+            else
+            {
+                Console.WriteLine();
+                Console.WriteLine("[SERVER] Unknown target, so I publish the same message to all clients.");
+
+                byte[] bytes = Encoding.UTF8.GetBytes(line);
+
+                server.Broadcast(bytes);
             }
         }
 
-        c1.Dispose(); c2.Dispose(); server.Dispose();
+        c1.Dispose();
+        c2.Dispose();
+
+        server.Dispose();
+    }
+
+    private static void ServerOnReceived(IParticle particle, ReadOnlyMemory<byte> memory)
+    {
+        if (particle == null)
+        {
+            Console.WriteLine("[ServerOnReceived] Argument 'particle' is NULL. It is a mistake.");
+            return;
+        }
+
+        try
+        {
+            string msg = Encoding.UTF8.GetString(memory.Span);
+            // Console.WriteLine($"[ServerOnReceived] <- {particle}: {msg}");
+
+            string respStr = "echo: " + msg;
+            byte[] response = Encoding.UTF8.GetBytes(respStr);
+
+            particle.Send(response);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine();
+            Console.WriteLine("[ServerOnReceived] Error: " + ex.Message + Environment.NewLine + Environment.NewLine +
+                ex + Environment.NewLine);
+            Console.WriteLine();
+        }
+    }
+
+    private static void SeverOnConnected(IParticle client)
+    {
+        if (client == null)
+        {
+            Console.WriteLine("[OnConnectedToSever] Argument 'client' is NULL. It is a mistake.");
+            return;
+        }
+
+        try
+        {
+            string ids = client.ToString() ?? "NULL";
+            Console.WriteLine("[SERVER] Client " + ids + " connected");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine();
+            Console.WriteLine("[OnConnectedToSever] Error: " + ex.Message + Environment.NewLine + Environment.NewLine +
+                ex + Environment.NewLine);
+            Console.WriteLine();
+        }
     }
 }
