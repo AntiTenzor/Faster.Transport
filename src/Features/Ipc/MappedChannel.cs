@@ -1,7 +1,8 @@
 ﻿using System;
+using System.Threading;
 using System.IO.MemoryMappedFiles;
 using System.Runtime.CompilerServices;
-using System.Threading;
+
 using Faster.Transport.Primitives;
 
 namespace Faster.Transport.Ipc
@@ -159,7 +160,9 @@ namespace Faster.Transport.Ipc
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Send(ReadOnlySpan<byte> payload)
         {
-            if (_reader) return;
+            if (_reader)
+                return;
+
             if (payload.Length > _maxPayload)
                 throw new ArgumentException($"Payload size {payload.Length} exceeds max {_maxPayload} bytes for this ring.");
 
@@ -180,14 +183,24 @@ namespace Faster.Transport.Ipc
         {
             _running = false;
 
-            try { _signal?.Set(); } catch { /* wake reader if waiting */ }
+            try
+            {
+                _signal?.Set();
+            }
+            catch { /* wake reader if waiting */ }
+
             if (_rxThread is not null && _rxThread.IsAlive)
             {
                 if (!_rxThread.Join(TimeSpan.FromMilliseconds(200)))
                     _rxThread.Interrupt();
             }
 
-            try { _view.SafeMemoryMappedViewHandle.ReleasePointer(); } catch { }
+            try
+            {
+                _view.SafeMemoryMappedViewHandle.ReleasePointer();
+            }
+            catch { }
+
             _view.Dispose();
             _mmf.Dispose();
             _signal?.Dispose();
