@@ -20,12 +20,19 @@ namespace Faster.Transport.Ipc
     /// </remarks>
     public sealed class MappedReactor : IReactor, IDisposable
     {
+        /// <summary>
+        /// Namespace ('Global\' or 'Local\')
+        /// </summary>
         private readonly string _ns;
+        /// <summary>
+        /// Base name used for all shared memory maps and events (e.g. 'FasterIpc')
+        /// </summary>
         private readonly string _base;
         private readonly int _ringBytes;
-        private readonly ConcurrentDictionary<ulong, IParticle> _clients = new();
-        private readonly Thread _registryThread;
+
         private volatile bool _running;
+        private readonly Thread _registryThread;
+        private readonly ConcurrentDictionary<ulong, IParticle> _clients = new();
 
         /// <summary>
         /// Triggered whenever a client sends data to the server.
@@ -195,33 +202,6 @@ namespace Faster.Transport.Ipc
         public void Stop()
         {
             Dispose();
-        }
-    }
-
-    /// <summary>
-    /// Represents a single connected client’s communication channel within the reactor.
-    /// </summary>
-    sealed class ClientParticle : MappedParticleBase
-    {
-        private readonly ulong _id;
-        private readonly MappedReactor _owner;
-
-        public ClientParticle(MappedChannel rx, MappedChannel tx, ulong id, MappedReactor owner)
-            : base(rx, tx)
-        {
-            _id = id;
-            _owner = owner;
-
-            // Forward messages to the reactor’s OnReceived callback.
-            OnReceived += (self, data) => _owner.OnReceived?.Invoke(self, data);
-        }
-
-        /// <summary>
-        /// Cleans up resources and notifies the reactor that the client disconnected.
-        /// </summary>
-        public override void Dispose()
-        {
-            base.Dispose();
         }
     }
 }
