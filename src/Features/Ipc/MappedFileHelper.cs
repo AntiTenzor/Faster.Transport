@@ -57,7 +57,7 @@ namespace Faster.Transport.Ipc
             );
 
             if (handle == IntPtr.Zero)
-                throw new Win32Exception();
+                throw new Win32Exception("Could not create file:'" + name + "' with capacity:" + capacity);
 
             return MemoryMappedFile.CreateOrOpen(name, capacity, MemoryMappedFileAccess.ReadWrite);
         }
