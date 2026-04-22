@@ -1,8 +1,10 @@
-﻿using Faster.Transport.Features.Tcp;
-using Faster.Transport.Inproc;
-using Faster.Transport.Ipc;
-using Faster.Transport.Contracts;
+﻿using System;
 using System.Net;
+
+using Faster.Transport.Ipc;
+using Faster.Transport.Inproc;
+using Faster.Transport.Contracts;
+using Faster.Transport.Features.Tcp;
 
 namespace Faster.Transport
 {
@@ -26,14 +28,27 @@ namespace Faster.Transport
     {
         #region === Configuration Fields ===
 
-        // What kind of server we’re building (default: TCP)
+        /// <summary>
+        /// What kind of server we’re building (default: TCP)
+        /// </summary>
         private TransportMode _mode = TransportMode.Tcp;
 
-        // The endpoint the TCP server will bind to (e.g., IP and port)
+        /// <summary>
+        /// The endpoint the TCP server will bind to (e.g., IP and port)
+        /// </summary>
         private EndPoint? _bindEndPoint;
 
-        // Used by IPC and Inproc modes to identify shared channels
+        /// <summary>
+        /// Used by IPC and Inproc modes to identify shared channels
+        /// </summary>
         private string? _channelName;
+
+        /// <summary>
+        /// Used by IPC and Inproc modes to identify visibility scope of shared memory areas.
+        ///
+        /// !WARNING! Global visibility REQUIRES admin privileges!
+        /// </summary>
+        private bool _isGlobal = false;
 
         // Tuning options
         private int _backlog = 1024; // How many pending connections the OS can queue
@@ -45,7 +60,7 @@ namespace Faster.Transport
         private Action<IParticle>? _onConnected;
         private Action<IParticle, ReadOnlyMemory<byte>>? _onReceived;
 
-        #endregion
+        #endregion === Configuration Fields ===
 
         #region === Fluent Configuration ===
 
@@ -67,7 +82,12 @@ namespace Faster.Transport
         /// <param name="endpoint">An <see cref="EndPoint"/> (e.g., 0.0.0.0:5000).</param>
         public ReactorBuilder BindTo(EndPoint endpoint)
         {
-            _bindEndPoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
+            if (endpoint == null)
+                throw new ArgumentNullException(nameof(endpoint));
+
+            // TODO: throw an exception if transport mode is not suitable for EndPoint?
+            // i.e. _mode == Inproc OR Ipc
+            _bindEndPoint = endpoint;
             return this;
         }
 
@@ -82,6 +102,23 @@ namespace Faster.Transport
                 throw new ArgumentException("Channel name cannot be null or empty.", nameof(channelName));
 
             _channelName = channelName.Trim();
+            return this;
+        }
+
+        /// <summary>
+        /// Specify scope of memory mapped files.
+        /// !WARNING! Global visibility REQUIRES admin privileges!
+        /// </summary>
+        /// <param name="global">
+        /// If true, shared memory objects are created under the "Global\\" namespace, 
+        /// making them visible across Windows sessions. Otherwise, "Local\\" is used.
+        /// </param>
+        public ReactorBuilder WithGlobal(bool isGlobal)
+        {
+            // TODO: throw an exception if transport mode is not suitable for isGlobal flag?
+            // i.e. _mode == Tcp OR Udp
+
+            _isGlobal = isGlobal;
             return this;
         }
 
@@ -129,6 +166,9 @@ namespace Faster.Transport
             if (capacity <= 0)
                 throw new ArgumentOutOfRangeException(nameof(capacity));
 
+            // TODO: throw an exception if transport mode is not suitable for ring capacity?
+            // i.e. _mode == Tcp OR Udp
+
             _ringCapacity = capacity;
             return this;
         }
@@ -138,7 +178,10 @@ namespace Faster.Transport
         /// </summary>
         public ReactorBuilder OnConnected(Action<IParticle> handler)
         {
-            _onConnected = handler ?? throw new ArgumentNullException(nameof(handler));
+            if (handler == null)
+                throw new ArgumentNullException(nameof(handler));
+
+            _onConnected = handler;
             return this;
         }
 
@@ -147,11 +190,14 @@ namespace Faster.Transport
         /// </summary>
         public ReactorBuilder OnReceived(Action<IParticle, ReadOnlyMemory<byte>> handler)
         {
-            _onReceived = handler ?? throw new ArgumentNullException(nameof(handler));
+            if (handler == null)
+                throw new ArgumentNullException(nameof(handler));
+
+            _onReceived = handler;
             return this;
         }
 
-        #endregion
+        #endregion === Fluent Configuration ===
 
         #region === Build ===
 
@@ -212,15 +258,14 @@ namespace Faster.Transport
         /// </remarks>
         private IReactor BuildIpcReactor()
         {
-            if (string.IsNullOrWhiteSpace(_channelName))
-            {
-                throw new InvalidOperationException("IPC mode requires WithChannel(channelName).");
-            }
+            string? chName = _channelName;
+            if ((chName == null) || String.IsNullOrWhiteSpace(chName))
+                throw new InvalidOperationException("IPC mode requires call WithChannel(channelName).");
 
             // Create a shared-memory reactor
             var reactor = new MappedReactor(
-                baseName: _channelName,
-                global: false,
+                baseName: chName,
+                global: _isGlobal,
                 ringBytes: _ringCapacity);
 
             if (_onConnected != null)
@@ -244,11 +289,12 @@ namespace Faster.Transport
         /// </remarks>
         private IReactor BuildInprocReactor()
         {
-            if (string.IsNullOrWhiteSpace(_channelName))
-                throw new InvalidOperationException("Inproc mode requires WithChannel(channelName).");
+            string? chName = _channelName;
+            if ((chName == null) || String.IsNullOrWhiteSpace(chName))
+                throw new InvalidOperationException("Inproc mode requires call WithChannel(channelName).");
 
             var reactor = new InprocReactor(
-                name: _channelName,
+                name: chName,
                 bufferSize: _bufferSize,
                 ringCapacity: _ringCapacity,
                 maxDegreeOfParallelism: _maxDegreeOfParallelism);
@@ -262,6 +308,6 @@ namespace Faster.Transport
             return reactor;
         }
 
-        #endregion
+        #endregion === Build ===
     }
 }

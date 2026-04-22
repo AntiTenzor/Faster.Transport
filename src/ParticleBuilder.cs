@@ -1,10 +1,12 @@
-﻿using Faster.Transport.Contracts;
-using Faster.Transport.Features.Tcp;
-using Faster.Transport.Features.Udp;
-using Faster.Transport.Inproc;
-using Faster.Transport.Ipc;
+﻿using System;
 using System.Net;
 using System.Net.Sockets;
+
+using Faster.Transport.Ipc;
+using Faster.Transport.Inproc;
+using Faster.Transport.Contracts;
+using Faster.Transport.Features.Tcp;
+using Faster.Transport.Features.Udp;
 
 namespace Faster.Transport
 {
@@ -56,18 +58,33 @@ namespace Faster.Transport
     {
         #region === Configuration Fields ===
 
-        // Selected transport type (default = TCP)
+        /// <summary>
+        /// Selected transport type (default = TCP)
+        /// </summary>
         private TransportMode _mode = TransportMode.Tcp;
 
-        // Network endpoints for TCP/UDP
+        /// <summary>
+        /// Network endpoints for TCP/UDP
+        /// </summary>
         private IPEndPoint? _remoteEndPoint;
         private IPEndPoint? _localEndPoint;
 
-        // Socket provided by a TCP acceptor (used for accepted connections)
+        /// <summary>
+        /// Socket provided by a TCP acceptor (used for accepted connections)
+        /// </summary>
         private Socket? _acceptedSocket;
 
-        // Shared channel name (used by IPC and Inproc modes)
+        /// <summary>
+        /// Shared channel name (used by IPC and Inproc modes)
+        /// </summary>
         private string? _channelName;
+
+        /// <summary>
+        /// Used by IPC and Inproc modes to identify visibility scope of shared memory areas.
+        ///
+        /// !WARNING! Global visibility REQUIRES admin privileges!
+        /// </summary>
+        private bool _isGlobal = false;
 
         // Performance and tuning options
         private int _bufferSize = 8192;
@@ -90,7 +107,7 @@ namespace Faster.Transport
         private Action<IParticle>? _onDisconnected;
         private Action<IParticle>? _onConnected;
 
-        #endregion
+        #endregion === Configuration Fields ===
 
         #region === Fluent Configuration ===
 
@@ -108,6 +125,9 @@ namespace Faster.Transport
         /// </summary>
         public ParticleBuilder WithRemote(IPEndPoint endpoint)
         {
+            if (endpoint == null)
+                throw new ArgumentNullException(nameof(endpoint));
+
             _remoteEndPoint = endpoint;
             _acceptedSocket = null;
             return this;
@@ -118,6 +138,9 @@ namespace Faster.Transport
         /// </summary>
         public ParticleBuilder WithLocal(IPEndPoint endpoint)
         {
+            if (endpoint == null)
+                throw new ArgumentNullException(nameof(endpoint));
+
             _localEndPoint = endpoint;
             return this;
         }
@@ -141,7 +164,27 @@ namespace Faster.Transport
         /// <param name="name">The unique name of the shared channel.</param>
         public ParticleBuilder WithChannel(string name)
         {
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException("Channel name cannot be null or empty.", nameof(name));
+
             _channelName = name;
+            return this;
+        }
+
+        /// <summary>
+        /// Specify scope of memory mapped files.
+        /// !WARNING! Global visibility REQUIRES admin privileges!
+        /// </summary>
+        /// <param name="global">
+        /// If true, shared memory objects are created under the "Global\\" namespace, 
+        /// making them visible across Windows sessions. Otherwise, "Local\\" is used.
+        /// </param>
+        public ParticleBuilder WithGlobal(bool isGlobal)
+        {
+            // TODO: throw an exception if transport mode is not suitable for isGlobal flag?
+            // i.e. _mode == Tcp OR Udp
+
+            _isGlobal = isGlobal;
             return this;
         }
 
@@ -150,6 +193,9 @@ namespace Faster.Transport
         /// </summary>
         public ParticleBuilder WithBufferSize(int bytes)
         {
+            if (bytes <= 0)
+                throw new ArgumentOutOfRangeException(nameof(bytes));
+
             _bufferSize = bytes;
             return this;
         }
@@ -159,6 +205,9 @@ namespace Faster.Transport
         /// </summary>
         public ParticleBuilder WithParallelism(int degree)
         {
+            if (degree <= 0)
+                throw new ArgumentOutOfRangeException(nameof(degree));
+
             _parallelism = degree;
             return this;
         }
@@ -168,6 +217,12 @@ namespace Faster.Transport
         /// </summary>
         public ParticleBuilder WithRingCapacity(int capacity)
         {
+            if (capacity <= 0)
+                throw new ArgumentOutOfRangeException(nameof(capacity));
+
+            // TODO: throw an exception if transport mode is not suitable for ring capacity?
+            // i.e. _mode == Tcp OR Udp
+
             _ringCapacity = capacity;
             return this;
         }
@@ -198,6 +253,9 @@ namespace Faster.Transport
         /// </summary>
         public ParticleBuilder OnReceived(Action<IParticle, ReadOnlyMemory<byte>> handler)
         {
+            if (handler == null)
+                throw new ArgumentNullException(nameof(handler));
+
             _onReceived = handler;
             return this;
         }
@@ -207,6 +265,9 @@ namespace Faster.Transport
         /// </summary>
         public ParticleBuilder OnConnected(Action<IParticle> handler)
         {
+            if (handler == null)
+                throw new ArgumentNullException(nameof(handler));
+
             _onConnected = handler;
             return this;
         }
@@ -216,6 +277,9 @@ namespace Faster.Transport
         /// </summary>
         public ParticleBuilder OnDisconnected(Action<IParticle> handler)
         {
+            if (handler == null)
+                throw new ArgumentNullException(nameof(handler));
+
             _onDisconnected = handler;
             return this;
         }
@@ -227,13 +291,21 @@ namespace Faster.Transport
         /// <param name="maxSeconds">The maximum retry delay in seconds.</param>
         public ParticleBuilder WithAutoReconnect(double baseSeconds = 1, double maxSeconds = 30)
         {
+            if (baseSeconds <= 0.1)
+                throw new ArgumentOutOfRangeException(nameof(baseSeconds),
+                    "Initial reconnect interval should be at least 0.1 sec. But it is " + baseSeconds);
+
+            if (maxSeconds < 1.001 * baseSeconds)
+                throw new ArgumentOutOfRangeException(nameof(baseSeconds),
+                    "Max reconnect interval should be at least " + (1.001 * baseSeconds) + " sec. But it is " + maxSeconds);
+            
             _autoReconnect = true;
             _baseDelay = TimeSpan.FromSeconds(baseSeconds);
             _maxDelay = TimeSpan.FromSeconds(maxSeconds);
             return this;
         }
 
-        #endregion
+        #endregion === Fluent Configuration ===
 
         #region === Build ===
 
@@ -292,46 +364,57 @@ namespace Faster.Transport
             }
 
             if (_remoteEndPoint == null)
-                throw new InvalidOperationException("TCP requires WithRemote().");
+                throw new InvalidOperationException("TCP requires call WithRemote(endpoint).");
 
             var client = new Particle(_remoteEndPoint, _bufferSize, _parallelism);
             ApplyHandlers(client);
+
             return client;
         }
 
         /// <summary>
         /// Builds an IPC (shared-memory) client particle.
+        /// 
+        /// !WARNING! Particle is already started!
         /// </summary>
         private IParticle BuildIpc()
         {
-            if (string.IsNullOrWhiteSpace(_channelName))
-                throw new InvalidOperationException("IPC mode requires WithChannel(name).");
+            string? chName = _channelName;
+            if ((chName == null) || String.IsNullOrWhiteSpace(chName))
+                throw new InvalidOperationException("IPC mode requires call WithChannel(name).");
 
             int ringBytes = _ringCapacity <= 0 ? (128 + (1 << 20)) : _ringCapacity;
 
             // Each IPC client gets a unique 64-bit ID so the server can identify it
-            var rnd = new Random();
-            var buf = new byte[8];
+            Random rnd = new Random();
+            byte[] buf = new byte[8];
             rnd.NextBytes(buf);
             ulong id = BitConverter.ToUInt64(buf, 0);
 
-            var client = new MappedParticle(_channelName, id, global: false, ringBytes: ringBytes);
+            MappedParticle client = new MappedParticle(chName, id, global: false, ringBytes: ringBytes);            
             ApplyHandlers(client);
+
             client.Start();
+
             return client;
         }
 
         /// <summary>
         /// Builds an Inproc (same-process) client particle.
+        /// 
+        /// !WARNING! Particle is already started!
         /// </summary>
         private IParticle BuildInproc()
         {
-            if (string.IsNullOrWhiteSpace(_channelName))
+            string? chName = _channelName;
+            if ((chName == null) || String.IsNullOrWhiteSpace(chName))
                 throw new InvalidOperationException("Inproc mode requires WithChannel(name).");
 
-            var client = new InprocParticle(_channelName, isServer: false, _ringCapacity);
+            var client = new InprocParticle(chName, isServer: false, _ringCapacity);
             ApplyHandlers(client);
+
             client.Start();
+
             return client;
         }
 
@@ -358,6 +441,7 @@ namespace Faster.Transport
 
             var p = new UdpParticle(localEp, remoteEp, allowBroadcast: _allowBroadcast);
             ApplyHandlers(p);
+
             return p;
         }
 
@@ -371,6 +455,6 @@ namespace Faster.Transport
             if (_onConnected != null) p.OnConnected = _onConnected;
         }
 
-        #endregion
+        #endregion === Build ===
     }
 }
