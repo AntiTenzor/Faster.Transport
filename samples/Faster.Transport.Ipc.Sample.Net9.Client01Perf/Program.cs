@@ -15,7 +15,7 @@ namespace Faster.Transport.Ipc.Sample.Net9.Client01Perf;
 internal class Program
 {
     // Configuration
-    public const string Base = Faster.Transport.Ipc.Sample.Net9.Server01Perf.Program.Base; // "FasterIpcServer01Perf";
+    public const string IpcChannelName = Faster.Transport.Ipc.Sample.Net9.Server01Perf.Program.IpcChannelName; // "FasterIpcServer01Perf";
 
     public const int expectedMessages = Faster.Transport.Ipc.Sample.Net9.Server01Perf.Program.totalMessages; // 10_000_000;
     public const int warmupMessages = Faster.Transport.Ipc.Sample.Net9.Server01Perf.Program.warmupMessages; // 100_000; // Warmup to stabilize performance
@@ -28,6 +28,7 @@ internal class Program
 
     static void Main(string[] args)
     {
+        Console.WriteLine();
         Console.WriteLine("Starting SUBSCRIBER with performance measurement...");
 
         // Monitor completion
@@ -40,12 +41,12 @@ internal class Program
 
         ParticleBuilder builder = new ParticleBuilder();
         builder = builder.UseMode(TransportMode.Ipc); // Must match the publisher
-        builder = builder.WithChannel(Base);
+        builder = builder.WithChannel(IpcChannelName);
         builder = builder.WithGlobal(false);
         builder = builder.OnReceived(SubscriberOnReceived);
         IParticle client = builder.Build();
         Console.WriteLine("   This client is of type     : {0}", client.GetType().FullName);
-        Console.WriteLine("   Base name of the channel is: {0}", Base);
+        Console.WriteLine("   Base name of the channel is: {0}", IpcChannelName);
         Console.WriteLine();
 
         Console.WriteLine($"Subscriber started. Expecting {expectedMessages:N0} messages...\n");
