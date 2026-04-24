@@ -73,7 +73,7 @@ namespace Faster.Transport.Inproc
             }
         }
 
-        #endregion
+        #endregion === FastBufferPool ===
 
         #region === Fields / Events ===
 
@@ -174,8 +174,8 @@ namespace Faster.Transport.Inproc
             if (_isDisposed)
                 throw new ObjectDisposedException(nameof(InprocParticle));
 
-            var link = _link ?? throw new InvalidOperationException("Not connected.");
-            var ring = _isServer ? link.ToClient : link.ToServer;
+            InprocLink link = _link ?? throw new InvalidOperationException("Not connected.");
+            MpscQueue<ArraySegment<byte>> ring = _isServer ? link.ToClient : link.ToServer;
 
             var buf = FastBufferPool.Rent(payload.Length);
             payload.CopyTo(buf);
@@ -200,7 +200,7 @@ namespace Faster.Transport.Inproc
             return TaskCompat.CompletedValueTask;
         }
 
-        #endregion
+        #endregion === Sending ===
 
         #region === Receiving (Hybrid Event Loop) ===
 
@@ -218,7 +218,7 @@ namespace Faster.Transport.Inproc
                 if (link is null)
                     return;
 
-                var inbound = _isServer ? link.ToServer : link.ToClient;
+                MpscQueue<ArraySegment<byte>> inbound = _isServer ? link.ToServer : link.ToClient;
                 int idleSpins = 0;
 
                 while (_running)
@@ -264,7 +264,7 @@ namespace Faster.Transport.Inproc
             }
         }
 
-        #endregion
+        #endregion === Receiving (Hybrid Event Loop) ===
 
         #region === Helpers / Cleanup ===
 
@@ -302,6 +302,6 @@ namespace Faster.Transport.Inproc
             _link = null;
         }
 
-        #endregion
+        #endregion === Helpers / Cleanup ===
     }
 }
