@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Text;
 using System.Diagnostics;
-//using System.Threading.Tasks;
 using System.Collections.Generic;
 
 using Faster.Transport;
@@ -14,16 +13,16 @@ namespace Faster.Transport.Ipc.Sample.Net9.Server01Perf;
 public class Program
 {
     // Configuration
-    public const string Base = "FasterIpcServer01Perf";
+    public const string IpcChannelName = "IpcServer01Perf";
 
     public const int totalMessages = 10_000_000;
-    public const int batchSize = 1000; // Send in batches to reduce overhead
+    public const int batchSize = 1_000; // Send in batches to reduce overhead
     public const int warmupMessages = 100_000; // Warmup to stabilize performance
 
     static void Main(string[] args)
     {
         Console.WriteLine();
-        Console.WriteLine("Starting PUBLISHER with performance measurement...");
+        Console.WriteLine("Starting IPC PUBLISHER with performance measurement...");
 
         //var publisher = new ParticleBuilder()
         //    .UseMode(TransportMode.Ipc) // Use Shared Memory
@@ -38,22 +37,28 @@ public class Program
 
         ReactorBuilder builder = new ReactorBuilder();
         builder = builder.UseMode(TransportMode.Ipc); // Use Shared Memory
-        builder = builder.WithChannel(Base);
+        builder = builder.WithChannel(IpcChannelName);
         builder = builder.WithGlobal(false);
         builder = builder.OnConnected(SeverOnConnected);
         IReactor server = builder.Build();
         Console.WriteLine("   This server is of type     : {0}", server.GetType().FullName);
-        Console.WriteLine("   Base name of the channel is: {0}", Base);
+        Console.WriteLine("   Base name of the channel is: {0}", IpcChannelName);
         Console.WriteLine();
 
         server.Start();
         Console.WriteLine($"Publisher started. Target: {totalMessages:N0} messages. Waiting incoming connection...");
 
         // Keep running to allow subscribers to finish
-        Console.WriteLine("Publisher continuing. RUN CLIENT NOW. Then press Enter to exit.");
+        Console.WriteLine("Publisher continuing. RUN IPC CLIENT NOW. Then press Enter to exit.");
         Console.ReadLine();
 
+        server.OnConnected -= SeverOnConnected;
+
         server.Dispose();
+
+        Console.WriteLine();
+        Console.WriteLine();
+        Console.WriteLine();
     }
 
     private static void SeverOnConnected(IParticle client)

@@ -15,7 +15,7 @@ namespace Faster.Transport.Ipc.Sample.Net9.Client01Perf;
 internal class Program
 {
     // Configuration
-    public const string IpcChannelName = Faster.Transport.Ipc.Sample.Net9.Server01Perf.Program.IpcChannelName; // "FasterIpcServer01Perf";
+    public const string IpcChannelName = Faster.Transport.Ipc.Sample.Net9.Server01Perf.Program.IpcChannelName; // "IpcServer01Perf";
 
     public const int expectedMessages = Faster.Transport.Ipc.Sample.Net9.Server01Perf.Program.totalMessages; // 10_000_000;
     public const int warmupMessages = Faster.Transport.Ipc.Sample.Net9.Server01Perf.Program.warmupMessages; // 100_000; // Warmup to stabilize performance
@@ -32,7 +32,7 @@ internal class Program
         Console.WriteLine("Starting SUBSCRIBER with performance measurement...");
 
         // Monitor completion
-        var monitorThread = new Thread(() => MonitorCompletion(expectedMessages));
+        var monitorThread = new Thread(() => MonitorCompletion(expectedMessages + warmupMessages));
         monitorThread.Start();
 
         // Let's do step-by-step:
@@ -74,7 +74,7 @@ internal class Program
         long currentCount = Interlocked.Increment(ref _receivedCount);
 
         // Start timing on first message
-        if (currentCount == warmupMessages)
+        if (currentCount == warmupMessages + 1)
         {
             lock (_lockObj)
             {
@@ -102,9 +102,9 @@ internal class Program
                                       $"Elapsed: {elapsedSec:F2}s");
                 }
 
-                string text = Encoding.UTF8.GetString(memory.Span);
+                //string text = Encoding.UTF8.GetString(memory.Span);
                 //var messageNum = int.Parse(text.Split('_')[1]);
-                Console.WriteLine("     Last msg: " + text);
+                //Console.WriteLine("     Last msg: " + text);
             }
         }
 
@@ -115,6 +115,7 @@ internal class Program
 
     static void MonitorCompletion(int expectedMessages)
     {
+        // Here expectedMessages is already equal to (totalMessages + warmupMessages)
         while (_receivedCount < expectedMessages)
         {
             Thread.Sleep(100); // Check every 100ms
@@ -130,8 +131,8 @@ internal class Program
         PrintFinalResults(expectedMessages + warmupMessages, _receivedCount);
 
         // Force exit after 2 seconds to allow user to see results
-        Thread.Sleep(2000);
-        Environment.Exit(0);
+        Thread.Sleep(2_000);
+        //Environment.Exit(0);
     }
 
     static void PrintFinalResults(int expectedReceived, long actualReceived)
@@ -151,7 +152,7 @@ internal class Program
 
             Console.WriteLine($"\nTotal Time:              {totalSeconds:F3} seconds");
             Console.WriteLine($"Messages per Second:     {messagesPerSecond:N0} msg/s");
-            Console.WriteLine($"Microseconds per Message: {microsecondsPerMessage:F2} μs");
+            Console.WriteLine($"Microseconds per Message: {microsecondsPerMessage:F2} us");
             Console.WriteLine($"Total Elapsed:           {_stopwatch.Elapsed}");
 
             // Performance assessment
