@@ -79,14 +79,19 @@ public sealed class Reactor : IDisposable, IReactor
                 // If completed synchronously, process immediately
                 ProcessAccept(e);
             }
-            catch (ObjectDisposedException)
+            catch (ObjectDisposedException objDispEx)
             {
+                Console.Error.WriteLine("[Tcp.Reactor] AcceptLoop catches ObjectDisposedException: {0}\r\n{1}\r\n",
+                    objDispEx.Message, objDispEx);
+
                 e.Dispose();
                 return;
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"[Reactor] Accept failed: {ex.Message}");
+                Console.Error.WriteLine("[Tcp.Reactor] AcceptLoop catches some exception: {0}\r\n{1}\r\n",
+                    ex.Message, ex);
+
                 Thread.Sleep(100);
             }
         }
@@ -124,25 +129,39 @@ public sealed class Reactor : IDisposable, IReactor
             int clientId = Interlocked.Increment(ref _clientCounter);
 
             // Build client handler from accepted socket
-            var client = new ParticleBuilder()
-                .UseMode(TransportMode.Tcp)
-                .FromAcceptedSocket(socket)
-                .WithBufferSize(_bufferSize)
-                .WithParallelism(_maxDegreeOfParallelism)
-                .OnReceived(OnReceived)
-                .OnDisconnected(_ => _clients.TryRemove(clientId, out _))
-                .Build();
+            // Let's do step-by-step:
+            ParticleBuilder clientBuilder = new ParticleBuilder();
+            clientBuilder = clientBuilder.UseMode(TransportMode.Tcp);
+            clientBuilder = clientBuilder.FromAcceptedSocket(socket);
+            clientBuilder = clientBuilder.WithBufferSize(_bufferSize);
+            clientBuilder = clientBuilder.WithParallelism(_maxDegreeOfParallelism);
+            if (OnReceived != null)
+                clientBuilder = clientBuilder.OnReceived(OnReceived);
+            clientBuilder = clientBuilder.OnDisconnected(_ => _clients.TryRemove(clientId, out _));
+
+            IParticle client = clientBuilder.Build();
 
             _clients[clientId] = client;
 
-            OnConnected?.Invoke(client);
+            if (OnConnected != null)
+                OnConnected(client);
 
             // Continue accepting
             AcceptLoop(e);
         }
+        catch (ObjectDisposedException objDispEx)
+        {
+            Console.Error.WriteLine("[Tcp.Reactor] ProcessAccept catches ObjectDisposedException: {0}\r\n{1}\r\n",
+                objDispEx.Message, objDispEx);
+
+            e.Dispose();
+            return;
+        }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"[Reactor] ProcessAccept error: {ex}");
+            Console.Error.WriteLine("[Tcp.Reactor] ProcessAccept catches some exception: {0}\r\n{1}\r\n",
+                ex.Message, ex);
+
             AcceptLoop(e);
         }
     }
