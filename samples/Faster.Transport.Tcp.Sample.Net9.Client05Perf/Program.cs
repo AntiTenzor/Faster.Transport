@@ -1,23 +1,9 @@
 ﻿/*
-========== FINAL IPC PERFORMANCE RESULTS ==========
-CPU:                     AMD Ryzen 3900   4.2GGz
-Memory:                  DDR4   1.3GGz
-
-Total Messages:          10,100,000
-Total Time:              1.563 seconds
-Messages per Second:     6_460_104 msg/s
-
---- Latency Statistics (microseconds) ---
-Average Latency:        1_114 us
-P50 Latency:            7.00 us
-P95 Latency:            11_960 us
-P99 Latency:            15_490 us
-P99.9 Latency:          19_563 us
-Samples Collected:      10,000
-===================================================
+ * 
  */
 
 using System;
+using System.Net;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -30,26 +16,26 @@ using Faster.Transport.Contracts;
 
 
 
-namespace Faster.Transport.Ipc.Sample.Net9.Client05Perf;
+namespace Faster.Transport.Tcp.Sample.Net9.Client05Perf;
 
 public class Program
 {
     #region Configuration
     /// <summary>
-    /// Channel name by default is equal to Server05Perf.Program.IpcChannelName.
+    /// Channel name by default is equal to Server05Perf.Program.TcpChannelName.
     /// You can change it with command line argument.
-    /// This makes this Client compatible with Server07Perf (at least with this one).
+    /// This makes this Client compatible with Server07Perf.Tcp (at least with this one).
     /// </summary>
-    public const string IpcChannelName = Faster.Transport.Ipc.Sample.Net9.Server05Perf.Program.IpcChannelName; // "IpcServer05Perf";
+    public const string TcpEndpoint = "127.0.0.1:6983";
 
     /// <summary>
     /// Expected regular messages: 10_000_000
     /// </summary>
-    public const int expectedMessages = Faster.Transport.Ipc.Sample.Net9.Server05Perf.Program.totalMessages; // 10_000_000;
+    public const int expectedMessages = 10_000_000;
     /// <summary>
     /// Warmup messages: 100_000
     /// </summary>
-    public const int warmupMessages = Faster.Transport.Ipc.Sample.Net9.Server05Perf.Program.warmupMessages; // 100_000; // Warmup to stabilize performance
+    public const int warmupMessages = 100_000; // Warmup to stabilize performance
     /// <summary>
     /// Progress log interval: 1_000_000
     /// </summary>
@@ -67,7 +53,7 @@ public class Program
     static void Main(string[] args)
     {
         Console.WriteLine();
-        Console.WriteLine("Starting IPC LATENCY MEASURING SUBSCRIBER (SYNC)...");
+        Console.WriteLine("Starting TCP LATENCY MEASURING SUBSCRIBER (SYNC)...");
 
         // Ensure high priority for this thread
         Thread.CurrentThread.Priority = ThreadPriority.Highest;
@@ -78,18 +64,19 @@ public class Program
         //monitorThread.Start();
 
         // Let's do step-by-step:
-        string channelName = IpcChannelName;
+        string endpointStr = TcpEndpoint;
         if (args.Length > 0)
-            channelName = args[0];
+            endpointStr = args[0];
+        IPEndPoint connectEndpoint = IPEndPoint.Parse(endpointStr);
 
         ParticleBuilder builder = new ParticleBuilder();
-        builder = builder.UseMode(TransportMode.Ipc); // Must match the publisher
-        builder = builder.WithChannel(channelName);
-        builder = builder.WithGlobal(false);
+        builder = builder.UseMode(TransportMode.Tcp); // Must match the publisher
+        builder = builder.WithRemote(connectEndpoint);
+        builder = builder.WithBufferSize(16384);
         builder = builder.OnReceived(SubscriberOnReceived);
         IParticle client = builder.Build();
         Console.WriteLine("   This client is of type     : {0}", client.GetType().FullName);
-        Console.WriteLine("   Base name of the channel is: {0}", channelName);
+        Console.WriteLine("   Base name of the channel is: {0}", endpointStr);
         Console.WriteLine();
 
         Console.WriteLine($"Subscriber started. Expecting {expectedMessages:N0} messages...\n");
@@ -124,7 +111,7 @@ public class Program
             latencyList.Sort();
         }
 
-        Console.WriteLine("\n========== FINAL IPC PERFORMANCE RESULTS ==========");
+        Console.WriteLine("\n========== FINAL TCP PERFORMANCE RESULTS ==========");
         Console.WriteLine($"Total Messages:          {_receivedCount:N0}");
         Console.WriteLine($"Total Time:              {_stopwatch.Elapsed.TotalSeconds:F3} seconds");
         Console.WriteLine($"Messages per Second:     {_receivedCount / _stopwatch.Elapsed.TotalSeconds:N0} msg/s");
@@ -135,7 +122,7 @@ public class Program
             foreach (long lat in latencyList)
                 avgLatency += lat;
             avgLatency /= latencyList.Count;
-            
+
             double p50Latency = latencyList[latencyList.Count / 2];
             double p95Latency = latencyList[(int)(latencyList.Count * 0.95)];
             double p99Latency = latencyList[(int)(latencyList.Count * 0.99)];
@@ -274,7 +261,7 @@ public class Program
 
     static void PrintFinalResults(int expectedReceived, long actualReceived)
     {
-        Console.WriteLine("\n========== SUBSCRIBER IPC PERFORMANCE RESULTS ==========");
+        Console.WriteLine("\n========== SUBSCRIBER TCP PERFORMANCE RESULTS ==========");
         Console.WriteLine($"Expected Messages:       {expectedReceived:N0}");
         Console.WriteLine($"Messages Received:       {actualReceived:N0}");
         Console.WriteLine($"Message Loss:            {expectedReceived - actualReceived:N0} " +

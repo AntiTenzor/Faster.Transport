@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <AssemblyName>Client07Perf</AssemblyName>
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    <ProduceReferenceAssembly>False</ProduceReferenceAssembly>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Faster.Transport.csproj" />
+    <ProjectReference Include="..\Faster.Transport.Ipc.Sample.Net9.Server07Perf\Faster.Transport.Ipc.Sample.Net9.Server07Perf.csproj" />
+  </ItemGroup>
+
+</Project>

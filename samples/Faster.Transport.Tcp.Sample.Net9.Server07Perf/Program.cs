@@ -1,17 +1,18 @@
 ﻿/*
-========== IPC PUBLISHER PERFORMANCE RESULTS ==========
-CPU:                      AMD Ryzen 3900   4.2GGz
-Memory:                   DDR4   1.3GGz
+========== PUBLISHER PERFORMANCE RESULTS ==========
+CPU:                       AMD Ryzen 3900   4.2GGz
+Memory:                    DDR4   1.3GGz
 
-Total Messages Sent:      100,000,000
-Total Time:               11.385 seconds
-Messages per Second:      8_783_183 msg/s
-Microseconds per Message: 0.11 us
-Total Elapsed:            00:00:11.3853943
-=======================================================
+Total Messages Sent:       10_000_000
+Total Time:                1.278 seconds
+Messages per Second:       7_825_866 msg/s
+Microseconds per Message:  0.13 us
+Total Elapsed:             00:00:01.2778138
+===================================================
  */
 
 using System;
+using System.Net;
 using System.Text;
 using System.Diagnostics;
 using System.Globalization;
@@ -23,60 +24,53 @@ using Faster.Transport.Contracts;
 
 
 
-namespace Faster.Transport.Ipc.Sample.Net9.Server07Perf;
+namespace Faster.Transport.Tcp.Sample.Net9.Server07Perf;
 
 public unsafe class Program
 {
-    #region Configuration
-    public const string IpcChannelName = "IpcServer07Perf";
+    // Configuration
+    public const string TcpEndpoint = "127.0.0.1:6983";
 
-    /// <summary>
-    /// Expected regular messages: 10_000_000
-    /// </summary>
-    public const int totalMessages = 100_000_000;
-
+    public const int totalMessages = 10_000_000;
     public const int batchSize = 1_000; // Send in batches to reduce overhead
+    public const int warmupMessages = 1_000_000; // Warmup to stabilize performance
 
-    /// <summary>
-    /// Warmup messages: 2_000_000
-    /// </summary>
-    public const int warmupMessages = 2_000_000; // Warmup to stabilize performance
-
-    /// <summary>
-    /// Progress log interval: 5_000_000
-    /// </summary>
-    public const long progressInterval = 5_000_000;
-    #endregion Configuration
+    //// Pre-allocated buffer pool for zero-allocation messaging
+    //private static readonly byte[] _sharedBuffer = new byte[256];
+    ////private static readonly char[] _numberBuffer = new char[20]; // Max for 64-bit int
 
     static void Main(string[] args)
     {
         Console.WriteLine();
-        Console.WriteLine("Starting ENHANCED IPC PUBLISHER (SYNC) with detailed metrics...");
+        Console.WriteLine("Starting ENHANCED TCP PUBLISHER (SYNC) with detailed metrics...");
 
         // Ensure high priority for this thread
         System.Threading.Thread.CurrentThread.Priority = System.Threading.ThreadPriority.Highest;
         Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.High;
 
         // Let's do step-by-step:
-        string channelName = IpcChannelName;
+        string endpointStr = TcpEndpoint;
         if (args.Length > 0)
-            channelName = args[0];
+            endpointStr = args[0];
+        EndPoint bindEndpoint = IPEndPoint.Parse(endpointStr);
 
         ReactorBuilder builder = new ReactorBuilder();
-        builder = builder.UseMode(TransportMode.Ipc); // Use Shared Memory
-        builder = builder.WithChannel(channelName);
-        builder = builder.WithGlobal(false);
+        builder = builder.UseMode(TransportMode.Tcp); // Use TCP
+        builder = builder.BindTo(bindEndpoint);       // To test local performance you'd like to bind to '127.0.0.1:6983'
+        //builder = builder.WithGlobal(false);
         builder = builder.OnConnected(SeverOnConnected);
+        // !!!BUG!!! Inconsistent behavior: TCP server can not work without OnReceived handler. But this should not be a problem.
+        builder = builder.OnReceived(SeverOnReceived);
         IReactor server = builder.Build();
         Console.WriteLine("   This server is of type     : {0}", server.GetType().FullName);
-        Console.WriteLine("   Base name of the channel is: {0}", channelName);
+        Console.WriteLine("   Base name of the channel is: {0}", endpointStr);
         Console.WriteLine();
 
         server.Start();
         Console.WriteLine($"Publisher started. Target: {totalMessages:N0} messages. Waiting incoming connection...");
 
         // Keep running to allow subscribers to finish
-        Console.WriteLine("Publisher continuing. RUN IPC CLIENT NOW. Then press Enter to exit.");
+        Console.WriteLine("Publisher continuing. RUN TCP CLIENT NOW. Then press Enter to exit.");
         Console.ReadLine();
 
         server.OnConnected -= SeverOnConnected;
@@ -86,6 +80,11 @@ public unsafe class Program
         Console.WriteLine();
         Console.WriteLine();
         Console.WriteLine();
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void SeverOnReceived(IParticle particle, ReadOnlyMemory<byte> memory)
+    {
     }
 
     private static void SeverOnConnected(IParticle client)
@@ -116,7 +115,7 @@ public unsafe class Program
         double messagesPerSecond = messagesSent / totalSeconds;
         double microsecondsPerMessage = (stopwatch.Elapsed.TotalMilliseconds * 1000) / messagesSent;
 
-        Console.WriteLine("\n========== IPC PUBLISHER PERFORMANCE RESULTS ==========");
+        Console.WriteLine("\n========== TCP PUBLISHER PERFORMANCE RESULTS ==========");
         Console.WriteLine($"Total Messages Sent:      {messagesSent:N0}");
         Console.WriteLine($"Total Time:               {stopwatch.Elapsed.TotalSeconds:F3} seconds");
         Console.WriteLine($"Messages per Second:      {messagesPerSecond:N0} msg/s");
@@ -168,7 +167,7 @@ public unsafe class Program
                 sentCount += currentBatchSize;
 
                 // Progress reporting every 1 million messages (only for actual measurement)
-                if (!isWarmup && (sentCount % progressInterval == 0))
+                if (!isWarmup && (sentCount % 1_000_000 == 0))
                 {
                     double elapsedSec = stopwatch.Elapsed.TotalSeconds;
                     double currentRate = sentCount / elapsedSec;

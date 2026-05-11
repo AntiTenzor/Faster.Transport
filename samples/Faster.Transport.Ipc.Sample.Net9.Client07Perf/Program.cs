@@ -1,19 +1,33 @@
 ﻿/*
+========== SUBSCRIBER IPC PERFORMANCE RESULTS ==========
+Expected Messages:        102_000_000
+Messages Received:        102_000_000
+Message Loss:             0 (0.00%)
+
+Total Time:               11.684 seconds
+Messages per Second:      8_729_782 msg/s
+Microseconds per Message: 0.11 us
+Total Elapsed:            00:00:11.6841407
+
+--- Performance Assessment ---
+*** GOOD: 8_729_782 msg/s - Close to 10M target
+========================================================
+
 ========== FINAL IPC PERFORMANCE RESULTS ==========
 CPU:                     AMD Ryzen 3900   4.2GGz
 Memory:                  DDR4   1.3GGz
 
-Total Messages:          10,100,000
-Total Time:              1.563 seconds
-Messages per Second:     6_460_104 msg/s
+Total Messages:          102_000_000
+Total Time:              11.684 seconds
+Messages per Second:     8_729_782 msg/s
 
 --- Latency Statistics (microseconds) ---
-Average Latency:        1_114 us
-P50 Latency:            7.00 us
-P95 Latency:            11_960 us
-P99 Latency:            15_490 us
-P99.9 Latency:          19_563 us
-Samples Collected:      10,000
+Average Latency:          268 us
+P50 Latency:               33 us
+P95 Latency:            1_408 us
+P99 Latency:            2_092 us
+P99.9 Latency:          3_328 us
+Samples Collected:      100_000
 ===================================================
  */
 
@@ -36,24 +50,24 @@ public class Program
 {
     #region Configuration
     /// <summary>
-    /// Channel name by default is equal to Server05Perf.Program.IpcChannelName.
+    /// Channel name by default is equal to Server07Perf.Program.IpcChannelName.
     /// You can change it with command line argument.
     /// This makes this Client compatible with Server07Perf (at least with this one).
     /// </summary>
-    public const string IpcChannelName = Faster.Transport.Ipc.Sample.Net9.Server05Perf.Program.IpcChannelName; // "IpcServer05Perf";
+    public const string IpcChannelName = Faster.Transport.Ipc.Sample.Net9.Server07Perf.Program.IpcChannelName; // "IpcServer07Perf";
 
     /// <summary>
     /// Expected regular messages: 10_000_000
     /// </summary>
-    public const int expectedMessages = Faster.Transport.Ipc.Sample.Net9.Server05Perf.Program.totalMessages; // 10_000_000;
+    public const int expectedMessages = Faster.Transport.Ipc.Sample.Net9.Server07Perf.Program.totalMessages; // 100_000_000;
     /// <summary>
-    /// Warmup messages: 100_000
+    /// Warmup messages: 2_000_000
     /// </summary>
-    public const int warmupMessages = Faster.Transport.Ipc.Sample.Net9.Server05Perf.Program.warmupMessages; // 100_000; // Warmup to stabilize performance
+    public const int warmupMessages = Faster.Transport.Ipc.Sample.Net9.Server07Perf.Program.warmupMessages; // 2_000_000; // Warmup to stabilize performance
     /// <summary>
-    /// Progress log interval: 1_000_000
+    /// Progress log interval: 5_000_000
     /// </summary>
-    public const long progressInterval = 1_000_000;
+    public const long progressInterval = Faster.Transport.Ipc.Sample.Net9.Server07Perf.Program.progressInterval; // 5_000_000;
     #endregion Configuration
 
     private static long _receivedCount = 0;
@@ -110,7 +124,7 @@ public class Program
             _stopwatch.Stop();
         }
 
-        PrintFinalResults(expectedMessages, _receivedCount);
+        PrintFinalResults(expectedMessages + warmupMessages, _receivedCount);
 
         // Calculate latency statistics
         List<long> latencyList = new List<long>(Math.Max(16, _latencies.Count));
@@ -135,7 +149,7 @@ public class Program
             foreach (long lat in latencyList)
                 avgLatency += lat;
             avgLatency /= latencyList.Count;
-            
+
             double p50Latency = latencyList[latencyList.Count / 2];
             double p95Latency = latencyList[(int)(latencyList.Count * 0.95)];
             double p99Latency = latencyList[(int)(latencyList.Count * 0.99)];
