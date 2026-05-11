@@ -450,9 +450,14 @@ namespace Faster.Transport
         /// </summary>
         private void ApplyHandlers(IParticle p)
         {
-            if (_onReceived != null) p.OnReceived = _onReceived;
-            if (_onDisconnected != null) p.OnDisconnected = _onDisconnected;
-            if (_onConnected != null) p.OnConnected = _onConnected;
+            if (_onReceived != null)
+                p.OnReceived = _onReceived;
+
+            if (_onDisconnected != null)
+                p.OnDisconnected = _onDisconnected;
+
+            if (_onConnected != null)
+                p.OnConnected = _onConnected;
         }
 
         #endregion === Build ===
